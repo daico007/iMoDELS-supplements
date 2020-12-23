@@ -128,6 +128,8 @@ def evaluate_model(test_df, model, target, features, descriptors, output_path):
     -------
     result : dict()
     """
+    import os
+    from pathlib import Path
     if isinstance(test_df, str):
         test_df = pd.read_csv(test_df)
     if isinstance(model, str):
@@ -164,6 +166,10 @@ def evaluate_model(test_df, model, target, features, descriptors, output_path):
     test_df_Y = test_df_red.filter([target], axis=1)
     results[target]['r_square'] = model.score(test_df_X, test_df_Y)
     print('Saving out to {}.'.format(output_path))
+
+    opath = Path(output_path)
+    if not os.path.isdir(opath.parent):
+        os.mkdir(opath.parent)
     with open(output_path, 'w') as f:
         json.dump(results, f)
 
@@ -171,59 +177,58 @@ def evaluate_model(test_df, model, target, features, descriptors, output_path):
 
 if __name__ == '__main__':
     # Define paths for data, model, test, and output
-    oresults_path = '../predicted-results/original'
-    mresults_path = '../predicted-results/mixed5050'
-    eresults_path = '../predicted-results/everything'
+    for i in range(5):
+        oresults_path = f'../predicted-results/original'
+        mresults_path = f'../predicted-results/mixed5050/set_{i}'
+        eresults_path = f'../predicted-results/everything/set_{i}'
 
-    omodels_path = '../models/original'
-    mmodels_path = '../models/mixed5050'
-    emodels_path = '../models/everything'
+        omodels_path = f'../models/original/'
+        mmodels_path = f'../models/mixed5050/set_{i}'
+        emodels_path = f'../models/everything/set_{i}'
 
-    models_results = {omodels_path : oresults_path,
-                    mmodels_path : mresults_path,
-                    emodels_path : eresults_path
-                    }
+        models_results = {omodels_path : oresults_path,
+                        mmodels_path : mresults_path,
+                        emodels_path : eresults_path
+                        }
 
-    test_5050_path = '../../data/splitted-data/mixed5050/test_df.csv'
-    test_2575_path = '../../data/splitted-data/mixed2575/test_df.csv'
-    test_everything_path = '../../data/splitted-data/everything/test_df.csv'
+        test_5050_path = f'../../data/splitted-data/mixed5050/test_set.csv'
+        test_2575_path = f'../../data/splitted-data/mixed2575/test_set.csv'
+        test_everything_path = f'../../data/splitted-data/everything/test_set.csv'
 
-    test_5050 = pd.read_csv(test_5050_path, index_col=0)
-    test_2575 = pd.read_csv(test_2575_path, index_col=0)
-    test_everything = pd.read_csv(test_everything_path, index_col=0)
+        test_5050 = pd.read_csv(test_5050_path, index_col=0)
+        test_2575 = pd.read_csv(test_2575_path, index_col=0)
+        test_everything = pd.read_csv(test_everything_path, index_col=0)
 
-    tests = {'5050' : test_5050,
-             '2575' : test_2575,
-             'everything' : test_everything
-            }
+        tests = {'5050' : test_5050,
+                 '2575' : test_2575,
+                 'everything' : test_everything
+                }
 
-    for path in models_results:
-        for entry in os.scandir(path):
-            # Ouput dir is models specific (original, 5050, everything)
-            output_path = models_results[path]
-            if entry.name.endswith('pickle'):
-                if 'intercept' in entry.name:
-                    target = 'intercept'
-                elif 'COF' in entry.name:
-                    target = 'COF'
+        for path in models_results:
+            for entry in os.scandir(path):
+                # Ouput dir is models specific (original, 5050, everything)
+                output_path = models_results[path]
+                if entry.name.endswith('pickle'):
+                    if 'intercept' in entry.name:
+                        target = 'intercept'
+                    elif 'COF' in entry.name:
+                        target = 'COF'
 
-                name = os.path.splitext(entry.name)[0]
-                features_path = '{}/{}.ptxt'.format(path, name)
+                    name = os.path.splitext(entry.name)[0]
+                    features_path = f'{path}/{name}.ptxt'
 
-                # Load model and features
-                with open(entry.path, 'rb') as fmodel:
-                    model = pickle.load(fmodel)
-                with open(features_path, 'rb') as ffeatures:
-                    features = pickle.load(ffeatures)
+                    # Load model and features
+                    with open(entry.path, 'rb') as fmodel:
+                        model = pickle.load(fmodel)
+                    with open(features_path, 'rb') as ffeatures:
+                        features = pickle.load(ffeatures)
 
-                # Throw everything to the evaluation method
-                for test_name, test_df in tests.items():
-                    output = '{}/{}_on_{}.json'.format(output_path,
-                                         name,
-                                         test_name)
-                    evaluate_model(test_df=test_df,
-                                   model=model,
-                                   target=target,
-                                   features=features,
-                                   descriptors=None,
-                                   output_path=output)
+                    # Throw everything to the evaluation method
+                    for test_name, test_set in tests.items():
+                        output = f'{output_path}/{name}_on_{test_name}.json'
+                        evaluate_model(test_df=test_set,
+                                       model=model,
+                                       target=target,
+                                       features=features,
+                                       descriptors=None,
+                                       output_path=output)

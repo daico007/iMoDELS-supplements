@@ -5,8 +5,37 @@ from matplotlib import pyplot as plt
 import sklearn
 import pandas as pd
 import os
+from matplotlib.legend_handler import HandlerBase
+
+#https://stackoverflow.com/questions/47391702/matplotlib-making-a-colored-markers-legend-from-scratch
+class MarkerHandler(HandlerBase):
+    def create_artists(self, legend, tup,xdescent, ydescent,
+                        width, height, fontsize,trans):
+        return [plt.Line2D([width/2], [height/2.],ls="",
+                       marker=tup[1],color=tup[0], transform=trans)]
+
+#https://stackoverflow.com/questions/52303660/iterating-markers-in-plots/52303895#52303895
+def mscatter(x,y,ax=None, m=None, **kw):
+    import matplotlib.markers as mmarkers
+    if not ax: ax=plt.gca()
+    sc = ax.scatter(x,y,**kw)
+    if (m is not None) and (len(m)==len(x)):
+        paths = []
+        for marker in m:
+            if isinstance(marker, mmarkers.MarkerStyle):
+                marker_obj = marker
+            else:
+                marker_obj = mmarkers.MarkerStyle(marker)
+            path = marker_obj.get_path().transformed(
+                        marker_obj.get_transform())
+            paths.append(path)
+        sc.set_paths(paths)
+    return sc
+
 
 def plot_feature_importances(model,
+                    train_df,
+                    target,
                     features,
                     feature_clusters,
                     output,
@@ -17,6 +46,10 @@ def plot_feature_importances(model,
     ----------
     model : sklearn.ensemble.RandomForestRegressor or str
         The model or path to the model
+    train_df : str or df
+        The training df or path to the training df used for this model
+    target : str ('COF' or 'intercept')
+        Target of the predictive model
     features : list or str
         The list of features that comes with the model.
         Ordered is important.
@@ -26,7 +59,7 @@ def plot_feature_importances(model,
     output : str
         Path of the output plot
     top_n : int, optional, default=7
-        Save one version with only top n features
+        Save one version with only top n sfeatures
 
     Returns
     -------
@@ -41,6 +74,9 @@ def plot_feature_importances(model,
     if isinstance(feature_clusters, str):
         with open(feature_clusters, 'r') as f:
             feature_clusters = json.load(f)
+    if isinstance(train_df, str):
+        train_df = pd.read_csv(train_df)
+
     mod_clusters = dict()
     for cluster in feature_clusters:
         for feature in feature_clusters[cluster]:
@@ -55,75 +91,133 @@ def plot_feature_importances(model,
                  'qdist': 'yellow',
                  'shape': 'blue',
                  'size': 'red'}
+    cats_marker = {'complexity': 'd',
+                   'qdist': 'o',
+                   'shape': '^',
+                   'size': 's'}
 
     feature_importances_dict = {
         'name': features,
         'value': model.feature_importances_.tolist(),
         'color': [cats_color[mod_clusters[feature]]
+                for feature in features],
+        'marker': [cats_marker[mod_clusters[feature]]
+                for feature in features],
+        'corr': [train_df.corr().at[target, feature]
                 for feature in features]}
+
     feature_importances_df = pd.DataFrame(feature_importances_dict)
 
     # Unranked
-    plt.style.use('ggplot')
-    plt.figure(figsize=(10, 10))
+    plt.figure(figsize=(12, 14))
 
-    plt.barh(feature_importances_df['name'],
-             feature_importances_df['value'],
+    plt.hlines(feature_importances_df['name'],
+               xmin=0,
+               xmax=feature_importances_df['value'],
+               color=['red' if val>=0 else 'skyblue'
+               for val in feature_importances_df['corr']],
+               zorder=1)
+
+    mscatter(feature_importances_df['value'],
+             feature_importances_df['name'],
+             m=feature_importances_df['marker'],
              color=feature_importances_df['color'],
-             height=0.5)
-    if target == 'COF':
-        plt.title('COF Feature Importances')
-    elif target == 'intercept':
-        plt.title('F$_0$ Feature Importance')
-    handles = [plt.Rectangle((0,0),1,1, color=cats_color[cat])
-               for cat in cats]
-    plt.legend(handles, ['Complexity', 'Charge Distribution', 'Shape', 'Size'], prop={'size': 15})
-    plt.savefig('{}_unranked.png'.format(output),
+             edgecolor='black',
+             zorder=2)
+
+    plt.xlabel('Relative Importances')
+    plt.ylabel('Features')
+    plt.xlim(0)
+    leg = plt.legend([('black', 'd'), ('yellow', 'o'),
+                      ('cornflowerblue', '^'), ('red', 's')],
+                    ['Complexity','Charge distribution','Shape','Size'],
+                    handler_map={tuple:MarkerHandler()},
+                    loc=4)
+
+    for legobj in leg.legendHandles:
+        legobj.set_markeredgecolor('black')
+        legobj.set_markeredgewidth(1)
+
+    plt.savefig(f'{output}_unranked.pdf',
              dpi=500, bbox_inches='tight')
 
     # Ranked version
     feature_importances_df.sort_values(
                                 by='value',
                                 inplace=True)
-    plt.style.use('ggplot')
-    plt.figure(figsize=(10, 10))
-    plt.barh(feature_importances_df['name'],
-             feature_importances_df['value'],
+
+    plt.figure(figsize=(12, 14))
+
+    plt.hlines(feature_importances_df['name'],
+               xmin=0,
+               xmax=feature_importances_df['value'],
+               color=['red' if val>=0 else 'skyblue'
+               for val in feature_importances_df['corr']],
+               zorder=1)
+
+    mscatter(feature_importances_df['value'],
+             feature_importances_df['name'],
+             m=feature_importances_df['marker'],
              color=feature_importances_df['color'],
-             height=0.5)
-    if target == 'COF':
-        plt.title('COF Feature Importances')
-    elif target == 'intercept':
-        plt.title('F$_0$ Feature Importance')
-    handles = [plt.Rectangle((0,0),1,1, color=cats_color[cat])
-               for cat in cats]
-    plt.legend(handles, ['Complexity', 'Charge Distribution', 'Shape', 'Size'], prop={'size': 15})
-    plt.savefig('{}_ranked.png'.format(output),
+             edgecolor='black',
+             zorder=2)
+
+    plt.xlabel('Relative Importances')
+    plt.ylabel('Features')
+    plt.xlim(0)
+    leg = plt.legend([('black', 'd'), ('yellow', 'o'),
+                      ('cornflowerblue', '^'), ('red', 's')],
+                    ['Complexity','Charge distribution','Shape','Size'],
+                    handler_map={tuple:MarkerHandler()},
+                    loc=4)
+
+    for legobj in leg.legendHandles:
+        legobj.set_markeredgecolor('black')
+        legobj.set_markeredgewidth(1)
+
+    plt.savefig(f'{output}_ranked.pdf',
              dpi=500, bbox_inches='tight')
 
     # Only top n
-    plt.style.use('ggplot')
-    plt.figure(figsize=(10, 10))
-    plt.barh(feature_importances_df['name'].tail(top_n),
-             feature_importances_df['value'].tail(top_n),
+
+    plt.figure(figsize=(10, 8))
+
+    plt.hlines(feature_importances_df['name'].tail(top_n),
+               xmin=0,
+               xmax=feature_importances_df['value'].tail(top_n),
+               color=['red' if val>=0 else 'skyblue'
+               for val in feature_importances_df['corr'].tail(top_n)],
+               zorder=1)
+
+    mscatter(feature_importances_df['value'].tail(top_n),
+             feature_importances_df['name'].tail(top_n),
+             m=feature_importances_df['marker'].tail(top_n),
              color=feature_importances_df['color'].tail(top_n),
-             height=0.5)
-    if target == 'COF':
-        plt.title('COF Feature Importances')
-    elif target == 'intercept':
-        plt.title('F$_0$ Feature Importance')
-    handles = [plt.Rectangle((0,0),1,1, color=cats_color[cat])
-               for cat in cats]
-    plt.legend(handles, ['Complexity', 'Charge Distribution', 'Shape', 'Size'], prop={'size': 15})
-    plt.savefig('{}_top{}.png'.format(output, top_n),
+             edgecolor='black',
+             zorder=2)
+
+    plt.xlabel('Relative Importances')
+    plt.ylabel('Features')
+    plt.xlim(0)
+    leg = plt.legend([('black', 'd'), ('yellow', 'o'),
+                      ('cornflowerblue', '^'), ('red', 's')],
+                    ['Complexity','Charge distribution','Shape','Size'],
+                    handler_map={tuple:MarkerHandler()},
+                    loc=4)
+
+    for legobj in leg.legendHandles:
+        legobj.set_markeredgecolor('black')
+        legobj.set_markeredgewidth(1)
+
+    plt.savefig(f'{output}_top{top_n}.pdf',
              dpi=500, bbox_inches='tight')
 
     plt.close('all')
     return None
 
 def plot_double_feature_importances(
-                COF_model, COF_features,
-                intercept_model, intercept_features,
+                COF_model, COF_features, COF_train_df,
+                intercept_model, intercept_features, intercept_train_df,
                 feature_clusters, output, top_n=7):
     """Plot both COF and intercept models feature importances on the same plot
 
@@ -145,7 +239,7 @@ def plot_double_feature_importances(
     top_n : int, optional, default=7
         Save one version with only top n features
     output : str
-        Path of the ouput plot
+        Path of the output plot
 
     Returns
     -------
@@ -157,12 +251,16 @@ def plot_double_feature_importances(
     if isinstance(COF_features, str):
         with open(COF_features, 'rb') as f:
             COF_features = pickle.load(f)
+    if isinstance(COF_train_df, str):
+        COF_train_df = pd.read_csv(COF_train_df, index_col=0)
     if isinstance(intercept_model, str):
         with open(intercept_model, 'rb') as f:
             intercept_model = pickle.load(f)
     if isinstance(intercept_features, str):
         with open(intercept_features, 'rb') as f:
             intercept_features = pickle.load(f)
+    if isinstance(intercept_train_df, str):
+        intercept_train_df = pd.read_csv(intercept_train_df, index_col=0)
     if isinstance(feature_clusters, str):
         with open(feature_clusters, 'r') as f:
             feature_clusters = json.load(f)
@@ -180,46 +278,96 @@ def plot_double_feature_importances(
                   'qdist': 'yellow',
                   'shape': 'blue',
                   'size': 'red'}
+    cats_marker = {'complexity': 'd',
+                   'qdist': 'o',
+                   'shape': '^',
+                   'size': 's'}
 
     COF_feature_importances_dict = {
         'name': COF_features,
         'value': COF_model.feature_importances_.tolist(),
         'color': [cats_color[mod_clusters[feature]]
+                for feature in COF_features],
+        'marker': [cats_marker[mod_clusters[feature]]
+                for feature in COF_features],
+        'corr': [COF_train_df.corr().at['COF', feature]
                 for feature in COF_features]}
+
     COF_feature_importances_df = pd.DataFrame(COF_feature_importances_dict)
     intercept_feature_importances_dict = {
         'name': intercept_features,
         'value': intercept_model.feature_importances_.tolist(),
         'color': [cats_color[mod_clusters[feature]]
+                for feature in intercept_features],
+        'marker': [cats_marker[mod_clusters[feature]]
+                for feature in intercept_features],
+        'corr': [intercept_train_df.corr().at['intercept', feature]
                 for feature in intercept_features]}
     intercept_feature_importances_df = pd.DataFrame(intercept_feature_importances_dict)
 
     # Unranked
-    plt.style.use('ggplot')
-    plt.figure(figsize=(20, 10))
+
+    plt.figure(figsize=(24, 14))
 
     plt.subplot(1, 2, 1)
-    plt.barh(COF_feature_importances_df['name'],
-             COF_feature_importances_df['value'],
+    plt.hlines(COF_feature_importances_df['name'],
+               xmin=0,
+               xmax=COF_feature_importances_df['value'],
+               color=['red' if val>=0 else 'skyblue'
+               for val in COF_feature_importances_df['corr']],
+               zorder=1)
+
+    mscatter(COF_feature_importances_df['value'],
+             COF_feature_importances_df['name'],
+             m=COF_feature_importances_df['marker'],
              color=COF_feature_importances_df['color'],
-             height=0.5)
-    plt.title('COF feature importances')
-    handles = [plt.Rectangle((0,0),1,1, color=cats_color[cat])
-             for cat in cats]
-    plt.legend(handles, ['Complexity', 'Charge Distribution',
-                          'Shape', 'Size'], prop={'size': 15})
+             edgecolor='black',
+             zorder=2)
+
+    plt.title('COF Model', fontsize=28, weight='bold')
+    plt.xlabel('Relative Importances')
+    plt.ylabel('Features')
+    plt.xlim(0)
+    leg = plt.legend([('black', 'd'), ('yellow', 'o'),
+                      ('cornflowerblue', '^'), ('red', 's')],
+                    ['Complexity','Charge distribution','Shape','Size'],
+                    handler_map={tuple:MarkerHandler()},
+                    loc=4)
+
+    for legobj in leg.legendHandles:
+        legobj.set_markeredgecolor('black')
+        legobj.set_markeredgewidth(1)
 
     plt.subplot(1, 2, 2)
-    plt.barh(intercept_feature_importances_df['name'],
-             intercept_feature_importances_df['value'],
+    plt.hlines(intercept_feature_importances_df['name'],
+               xmin=0,
+               xmax=intercept_feature_importances_df['value'],
+               color=['red' if val>=0 else 'skyblue'
+               for val in intercept_feature_importances_df['corr']],
+               zorder=1)
+
+    mscatter(intercept_feature_importances_df['value'],
+             intercept_feature_importances_df['name'],
+             m=intercept_feature_importances_df['marker'],
              color=intercept_feature_importances_df['color'],
-             height=0.5)
-    plt.title('F$_0$ feature importances')
-    handles = [plt.Rectangle((0,0),1,1, color=cats_color[cat])
-             for cat in cats]
-    plt.legend(handles, ['Complexity', 'Charge Distribution',
-                          'Shape', 'Size'], prop={'size': 15})
-    plt.savefig('{}_unranked.png'.format(output),
+             edgecolor='black',
+             zorder=2)
+
+    plt.title('F$_0$ Model', fontsize=28, weight='bold')
+    plt.xlabel('Relative Importances')
+    plt.ylabel('Features')
+    plt.xlim(0)
+    leg = plt.legend([('black', 'd'), ('yellow', 'o'),
+                      ('cornflowerblue', '^'), ('red', 's')],
+                    ['Complexity','Charge distribution','Shape','Size'],
+                    handler_map={tuple:MarkerHandler()},
+                    loc=4)
+
+    for legobj in leg.legendHandles:
+        legobj.set_markeredgecolor('black')
+        legobj.set_markeredgewidth(1)
+
+    plt.savefig(f'{output}_unranked.pdf',
              dpi=500, bbox_inches='tight')
 
     # Ranked
@@ -229,60 +377,135 @@ def plot_double_feature_importances(
     intercept_feature_importances_df.sort_values(
                                     by='value',
                                     inplace=True)
-    plt.style.use('ggplot')
-    plt.figure(figsize=(20, 10))
+
+    plt.figure(figsize=(24, 14))
 
     plt.subplot(1, 2, 1)
-    plt.barh(COF_feature_importances_df['name'],
-             COF_feature_importances_df['value'],
+    plt.hlines(COF_feature_importances_df['name'],
+               xmin=0,
+               xmax=COF_feature_importances_df['value'],
+               color=['red' if val>=0 else 'skyblue'
+               for val in COF_feature_importances_df['corr']],
+               zorder=1)
+
+    mscatter(COF_feature_importances_df['value'],
+             COF_feature_importances_df['name'],
+             m=COF_feature_importances_df['marker'],
              color=COF_feature_importances_df['color'],
-             height=0.5)
-    plt.title('COF feature importances')
-    handles = [plt.Rectangle((0,0),1,1, color=cats_color[cat])
-             for cat in cats]
-    plt.legend(handles, ['Complexity', 'Charge Distribution',
-                          'Shape', 'Size'], prop={'size': 15})
+             edgecolor='black',
+             zorder=2)
+
+    plt.title('COF Model', fontsize=28, weight='bold')
+    plt.xlabel('Relative Importances')
+    plt.ylabel('Features')
+    plt.xlim(0)
+    leg = plt.legend([('black', 'd'), ('yellow', 'o'),
+                      ('cornflowerblue', '^'), ('red', 's')],
+                    ['Complexity','Charge distribution','Shape','Size'],
+                    handler_map={tuple:MarkerHandler()},
+                    loc=4)
+
+    for legobj in leg.legendHandles:
+        legobj.set_markeredgecolor('black')
+        legobj.set_markeredgewidth(1)
 
     plt.subplot(1, 2, 2)
-    plt.barh(intercept_feature_importances_df['name'],
-             intercept_feature_importances_df['value'],
+    plt.hlines(intercept_feature_importances_df['name'],
+               xmin=0,
+               xmax=intercept_feature_importances_df['value'],
+               color=['red' if val>=0 else 'skyblue'
+               for val in intercept_feature_importances_df['corr']],
+               zorder=1)
+
+    mscatter(intercept_feature_importances_df['value'],
+             intercept_feature_importances_df['name'],
+             m=intercept_feature_importances_df['marker'],
              color=intercept_feature_importances_df['color'],
-             height=0.5)
-    plt.title('F$_0$ feature importances')
-    handles = [plt.Rectangle((0,0),1,1, color=cats_color[cat])
-             for cat in cats]
-    plt.legend(handles, ['Complexity', 'Charge Distribution',
-                          'Shape', 'Size'], prop={'size': 15})
-    plt.savefig('{}_ranked.png'.format(output),
+             edgecolor='black',
+             zorder=2)
+
+    plt.title('F$_0$ Model', fontsize=28, weight='bold')
+    plt.xlabel('Relative Importances')
+    plt.ylabel('Features')
+    plt.xlim(0)
+    leg = plt.legend([('black', 'd'), ('yellow', 'o'),
+                      ('cornflowerblue', '^'), ('red', 's')],
+                    ['Complexity','Charge distribution','Shape','Size'],
+                    handler_map={tuple:MarkerHandler()},
+                    loc=4)
+
+    for legobj in leg.legendHandles:
+        legobj.set_markeredgecolor('black')
+        legobj.set_markeredgewidth(1)
+
+    plt.savefig(f'{output}_ranked.pdf',
              dpi=500, bbox_inches='tight')
 
     # Top_n
-    plt.style.use('ggplot')
-    plt.figure(figsize=(20, 10))
+
+    plt.figure(figsize=(20, 8))
 
     plt.subplot(1, 2, 1)
-    plt.barh(COF_feature_importances_df['name'].tail(top_n),
-             COF_feature_importances_df['value'].tail(top_n),
+    plt.hlines(COF_feature_importances_df['name'].tail(top_n),
+               xmin=0,
+               xmax=COF_feature_importances_df['value'].tail(top_n),
+               color=['red' if val>=0 else 'skyblue'
+               for val in COF_feature_importances_df['corr'].tail(top_n)],
+               zorder=1)
+
+    mscatter(COF_feature_importances_df['value'].tail(top_n),
+             COF_feature_importances_df['name'].tail(top_n),
+             m=COF_feature_importances_df['marker'].tail(top_n),
              color=COF_feature_importances_df['color'].tail(top_n),
-             height=0.5)
-    plt.title('COF feature importances')
-    handles = [plt.Rectangle((0,0),1,1, color=cats_color[cat])
-             for cat in cats]
-    plt.legend(handles, ['Complexity', 'Charge Distribution',
-                          'Shape', 'Size'], prop={'size': 15})
+             edgecolor='black',
+             zorder=2)
+
+    plt.title('COF Model', fontsize=28, weight='bold')
+    plt.xlabel('Relative Importances')
+    plt.ylabel('Features')
+    plt.xlim(0)
+    leg = plt.legend([('black', 'd'), ('yellow', 'o'),
+                      ('cornflowerblue', '^'), ('red', 's')],
+                    ['Complexity','Charge distribution','Shape','Size'],
+                    handler_map={tuple:MarkerHandler()},
+                    loc=4)
+
+    for legobj in leg.legendHandles:
+        legobj.set_markeredgecolor('black')
+        legobj.set_markeredgewidth(1)
 
     plt.subplot(1, 2, 2)
-    plt.barh(intercept_feature_importances_df['name'].tail(top_n),
-             intercept_feature_importances_df['value'].tail(top_n),
+    plt.hlines(intercept_feature_importances_df['name'].tail(top_n),
+               xmin=0,
+               xmax=intercept_feature_importances_df['value'].tail(top_n),
+               color=['red' if val>=0 else 'skyblue'
+               for val in intercept_feature_importances_df['corr'].tail(top_n)],
+               zorder=1)
+
+    mscatter(intercept_feature_importances_df['value'].tail(top_n),
+             intercept_feature_importances_df['name'].tail(top_n),
+             m=intercept_feature_importances_df['marker'].tail(top_n),
              color=intercept_feature_importances_df['color'].tail(top_n),
-             height=0.5)
-    plt.title('F$_0$ feature importances')
-    handles = [plt.Rectangle((0,0),1,1, color=cats_color[cat])
-             for cat in cats]
-    plt.legend(handles, ['Complexity', 'Charge Distribution',
-                          'Shape', 'Size'], prop={'size': 15})
-    plt.savefig('{}_top{}.png'.format(output, top_n),
+             edgecolor='black',
+             zorder=2)
+
+    plt.title('F$_0$ Model', fontsize=28, weight='bold')
+    plt.xlabel('Relative Importances')
+    plt.ylabel('Features')
+    plt.xlim(0)
+    leg = plt.legend([('black', 'd'), ('yellow', 'o'),
+                      ('cornflowerblue', '^'), ('red', 's')],
+                    ['Complexity','Charge distribution','Shape','Size'],
+                    handler_map={tuple:MarkerHandler()},
+                    loc=4)
+
+    for legobj in leg.legendHandles:
+        legobj.set_markeredgecolor('black')
+        legobj.set_markeredgewidth(1)
+
+    plt.savefig(f'{output}_top{top_n}.pdf',
              dpi=500, bbox_inches='tight')
+
 
     plt.close('all')
     return None
@@ -290,7 +513,7 @@ def plot_double_feature_importances(
 def plot_simulated_predicted(predicted_data,
                              output,
                              bound_lines=None,
-                             ):
+                             alpha=0.1):
     """Plot the simulated vs predicted plot of the generated dta file
 
     Paratermeters
@@ -324,24 +547,24 @@ def plot_simulated_predicted(predicted_data,
         results['y'].append(
             predicted_data[target][str(idx)]['simulated-{}'.format(target)])
 
-    plt.style.use('default')
-    alpha = 0.2
 
-    plt.scatter(results['x'], results['y'], alpha=alpha)
+    alpha = alpha
+    plt.figure(figsize=(10, 8))
+    plt.scatter(results['x'], results['y'], alpha=alpha, marker='.')
     if target == 'COF':
-        plt.xlabel('{} (Predicted)'.format(target), fontsize=15, weight='bold')
-        plt.ylabel('{} (Simulated)'.format(target), fontsize=15, weight='bold')
-        plt.title('COF - Predicted vs Simulated', fontsize=20)
+        plt.xlabel('{} (Predicted)'.format(target))
+        plt.ylabel('{} (Simulated)'.format(target))
         plt.xlim(0.085, 0.2)
         plt.ylim(0.085, 0.2)
+        plt.text(x=0.16, y=0.1, s=f'r$^2$={results["r_square"]:.3f}', fontsize=28)
     elif target == 'intercept':
-        plt.title('F$_0$ - Predicted vs Simulated', fontsize=20)
         plt.xlim(-1, 9)
         plt.ylim(-1, 9)
-        plt.xlabel('F$_0$ (Predicted)', fontsize=15, weight='bold')
-        plt.ylabel('F$_0$ (Simulated)', fontsize=15, weight='bold')
+        plt.xlabel('F$_0$ (Predicted)')
+        plt.ylabel('F$_0$ (Simulated)')
+        plt.text(x=5.5, y=0.3, s=f'r$^2$={results["r_square"]:.3f}', fontsize=28)
     xpoints = ypoints = plt.xlim()
-    plt.plot(xpoints, ypoints, linestyle='--', color='k', lw=3, scalex=False, scaley=False, alpha=alpha)
+    plt.plot(xpoints, ypoints, linestyle='--', color='k', lw=3, scalex=False, scaley=False, alpha=0.2)
 
     # Draw bound line if need be
     if bound_lines:
@@ -349,18 +572,21 @@ def plot_simulated_predicted(predicted_data,
         ylowers = [x*(1-bound_lines) for x in xpoints]
         plt.plot(xpoints, yuppers, linestyle='--',
             color='k', lw=3, scalex=False,
-            scaley=False, alpha=alpha)
+            scaley=False, alpha=0.2)
         plt.plot(xpoints, ylowers, linestyle='--',
             color='k', lw=3, scalex=False,
-            scaley=False, alpha=alpha)
+            scaley=False, alpha=0.2)
 
-    plt.savefig('{}.png'.format(output), dpi=500, bbox_inches='tight')
+    plt.savefig(f'{output}.pdf', dpi=500, bbox_inches='tight')
 
     plt.close('all')
     return None
 
 def plot_double_simulated_predicted(
-                COF_data, intercept_data, output, bound_lines=None):
+                COF_data, intercept_data,
+                output,
+                bound_lines=None,
+                alpha=0.1):
     """Plot both COF and intercept models simulated vs predicted on the same plot
     """
     if isinstance(COF_data, str):
@@ -392,239 +618,220 @@ def plot_double_simulated_predicted(
             results[target]['y'].append(
                 data[target][str(idx)]['simulated-{}'.format(target)])
 
-    plt.style.use('default')
-    plt.figure(figsize=(10, 8))
-    alpha = 0.2
+
+    plt.figure(figsize=(20, 8))
+    alpha = alpha
 
     # Plot COF
-    plt.subplot(221)
-    plt.title('Predicted vs Simulated - COF', fontsize=20)
-    plt.xlabel('COF (Predicted)', fontsize=15, weight='bold')
-    plt.ylabel('COF (Simulated)', fontsize=15, weight='bold')
-    plt.scatter(results['COF']['x'], results['COF']['y'], alpha=alpha)
+    plt.subplot(1, 2, 1)
+    plt.title('COF Model', fontsize=28, weight='bold')
+    plt.xlabel('COF (Predicted)')
+    plt.ylabel('COF (Simulated)')
+    plt.scatter(results['COF']['x'], results['COF']['y'], alpha=alpha, marker='.')
+    plt.text(x=0.16, y=0.1, s=f'r$^2$={results["COF"]["r_square"]:.3f}', fontsize=28)
     plt.xlim(0.085, 0.2)
     plt.ylim(0.085, 0.2)
     xpoints = ypoints = plt.xlim()
-    plt.plot(xpoints, ypoints, linestyle='--', color='k', lw=3, scalex=False, scaley=False, alpha=alpha)
+    plt.plot(xpoints, ypoints, linestyle='--', color='k', lw=3, scalex=False, scaley=False, alpha=0.2)
 
     if bound_lines:
         yuppers = [x*(1+bound_lines) for x in xpoints]
         ylowers = [x*(1-bound_lines) for x in xpoints]
         plt.plot(xpoints, yuppers, linestyle='--',
             color='k', lw=3, scalex=False,
-            scaley=False, alpha=alpha)
+            scaley=False, alpha=0.2)
         plt.plot(xpoints, ylowers, linestyle='--',
             color='k', lw=3, scalex=False,
-            scaley=False, alpha=alpha)
+            scaley=False, alpha=0.2)
 
     # Plot intercept
-    plt.subplot(222)
-    plt.title('F$_0$ - Predicted vs Simulated', fontsize=20)
-    plt.xlabel('F$_{0}$ (Predicted), nN', fontsize=15, weight='bold')
-    plt.ylabel('F$_{0}$ (Simulated), nN', fontsize=15, weight='bold')
-    plt.scatter(results['intercept']['x'], results['intercept']['y'], alpha=alpha)
+    plt.subplot(1, 2, 2)
+    plt.title('F$_{0}$ Model', fontsize=28, weight='bold')
+    plt.xlabel('F$_{0}$ (Predicted), nN')
+    plt.ylabel('F$_{0}$ (Simulated), nN')
+    plt.scatter(results['intercept']['x'], results['intercept']['y'], alpha=alpha, marker='.')
+    plt.text(x=5.5, y=0.3, s=f'r$^2$={results["intercept"]["r_square"]:.3f}', fontsize=28)
     plt.xlim(-1, 9)
     plt.ylim(-1, 9)
     xpoints = ypoints = plt.xlim()
-    plt.plot(xpoints, ypoints, linestyle='--', color='k', lw=3, scalex=False, scaley=False, alpha=alpha)
+    plt.plot(xpoints, ypoints, linestyle='--', color='k', lw=3, scalex=False, scaley=False, alpha=0.2)
 
     if bound_lines:
         yuppers = [x*(1+bound_lines) for x in xpoints]
         ylowers = [x*(1-bound_lines) for x in xpoints]
         plt.plot(xpoints, yuppers, linestyle='--',
             color='k', lw=3, scalex=False,
-            scaley=False, alpha=alpha)
+            scaley=False, alpha=0.2)
         plt.plot(xpoints, ylowers, linestyle='--',
             color='k', lw=3, scalex=False,
-            scaley=False, alpha=alpha)
+            scaley=False, alpha=0.2)
 
-    plt.savefig('{}.png'.format(output), dpi=500, bbox_inches='tight')
+    plt.savefig(f'{output}.pdf', dpi=500, bbox_inches='tight')
     
     plt.close('all')
     return None
 
 if __name__ == '__main__':
     fc_path = 'feature-clusters.json'
+    alpha=0.1
+    for i in range(5):
+        oresults_path = f'../predicted-results/original'
+        mresults_path = f'../predicted-results/mixed5050/set_{i}'
+        eresults_path = f'../predicted-results/everything/set_{i}'
 
-    oresults_path = '../predicted-results/original'
-    mresults_path = '../predicted-results/mixed5050'
-    eresults_path = '../predicted-results/everything'
+        for path in [oresults_path, mresults_path, eresults_path]:
+            if not os.path.isdir(f'{path}/plots'):
+                os.mkdir(f'{path}/plots')
 
-    omodels_path = '../models/original'
-    mmodels_path = '../models/mixed5050'
-    emodels_path = '../models/everything'
+        omodels_path = f'../models/original'
+        mmodels_path = f'../models/mixed5050/set_{i}'
+        emodels_path = f'../models/everything/set_{i}'
 
-    mfractions = [0.05, 0.1, 0.2,
-                  0.3, 0.5, 0.7, 1]
-    efractions = [0.01, 0.02, 0.03,
-                 0.05, 0.1, 0.2, 0.3,
-                 0.5, 0.7, 1]
+        otrains_path = f'../../data/raw-data'
+        mtrains_path = f'../../data/splitted-data/mixed5050/set_{i}'
+        etrains_path = f'../../data/splitted-data/everything/set_{i}'
 
-    test_sets = ['5050', '2575', 'everything']
+        mfractions = [0.05, 0.1, 0.2,
+                      0.3, 0.5, 0.7, 1]
+        efractions = [0.01, 0.02, 0.03,
+                     0.05, 0.1, 0.2, 0.3,
+                     0.5, 0.7, 1]
 
-    """Plot feature importances"""
-    top_n = 7
+        test_sets = ['5050', '2575', 'everything']
 
-    # First handle the original models
-    for target in ['COF', 'intercept']:
-        m_file = '{}/{}.pickle'.format(
-                                omodels_path,
-                                target)
-        f_file = '{}/{}.ptxt'.format(
-                                omodels_path,
-                                target)
-        output = '{}/plots/fi_{}'.format(
-                                oresults_path,
-                                target)
+        """Plot feature importances"""
+        top_n = 8
 
-        plot_feature_importances(model=m_file,
-                                 features=f_file,
-                                 feature_clusters=fc_path,
-                                 output=output,
-                                 top_n=top_n)
-    plot_double_feature_importances(
-                        COF_model='{}/COF.pickle'.format(omodels_path),
-                        COF_features='{}/COF.ptxt'.format(omodels_path),
-                        intercept_model='{}/intercept.pickle'.format(omodels_path),
-                        intercept_features='{}/intercept.ptxt'.format(omodels_path),
+        # First handle the original models
+        for target in ['COF', 'intercept']:
+            m_file = f'{omodels_path}/{target}.pickle'
+            f_file = f'{omodels_path}/{target}.ptxt'
+            t_file = f'{otrains_path}/original-100.csv'
+            output = f'{oresults_path}/plots/fi_{target}'
+
+            plot_feature_importances(model=m_file,
+                                     features=f_file,
+                                     train_df=t_file,
+                                     target=target,
+                                     feature_clusters=fc_path,
+                                     output=output,
+                                     top_n=top_n)
+        plot_double_feature_importances(
+                            COF_model=f'{omodels_path}/COF.pickle',
+                            COF_features=f'{omodels_path}/COF.ptxt',
+                            COF_train_df=f'{otrains_path}/original-100.csv',
+                            intercept_model=f'{omodels_path}/intercept.pickle',
+                            intercept_features=f'{omodels_path}/intercept.ptxt',
+                            intercept_train_df=f'{otrains_path}/original-100.csv',
+                            feature_clusters=fc_path,
+                            output=f'{oresults_path}/plots/dfi_original',
+                            top_n=top_n)
+
+        # Then handle the 5050 model
+        for fraction in mfractions:
+            for target in ['COF', 'intercept']:
+                m_file = f'{mmodels_path}/{target}_{fraction}.pickle'
+                f_file = f'{mmodels_path}/{target}_{fraction}.ptxt'
+                t_file = f'{mtrains_path}/{target}_{fraction}.csv'
+                output = f'{mresults_path}/plots/fi_{target}_{fraction}'
+                plot_feature_importances(model=m_file,
+                                         train_df=t_file,
+                                         target=target,
+                                         features=f_file,
+                                         feature_clusters=fc_path,
+                                         output=output,
+                                         top_n=top_n)
+            plot_double_feature_importances(
+                        COF_model=f'{mmodels_path}/COF_{fraction}.pickle',
+                        COF_features=f'{mmodels_path}/COF_{fraction}.ptxt',
+                        COF_train_df=f'{mtrains_path}/COF_{fraction}.csv',
+                        intercept_model=f'{mmodels_path}/intercept_{fraction}.pickle',
+                        intercept_features=f'{mmodels_path}/intercept_{fraction}.ptxt',
+                        intercept_train_df=f'{mtrains_path}/intercept_{fraction}.csv',
                         feature_clusters=fc_path,
-                        output='{}/plots/dfi_original'.format(oresults_path),
+                        output=f'{mresults_path}/plots/dfi_mixed5050_{fraction}',
                         top_n=top_n)
 
-    # Then handle the 5050 model
-    for fraction in mfractions:
-        for target in ['COF', 'intercept']:
-            m_file = '{}/{}_{}.pickle'.format(mmodels_path, target, fraction)
-            f_file = '{}/{}_{}.ptxt'.format(mmodels_path, target, fraction)
-            output = '{}/plots/fi_{}_{}'.format(mresults_path, target, fraction)
-            plot_feature_importances(model=m_file,
-                                     features=f_file,
-                                     feature_clusters=fc_path,
-                                     output=output,
-                                     top_n=top_n)
-        plot_double_feature_importances(
-                    COF_model='{}/COF_{}.pickle'.format(mmodels_path, fraction),
-                    COF_features='{}/COF_{}.ptxt'.format(mmodels_path, fraction),
-                    intercept_model='{}/intercept_{}.pickle'.format(mmodels_path, fraction),
-                    intercept_features='{}/intercept_{}.ptxt'.format(mmodels_path, fraction),
-                    feature_clusters=fc_path,
-                    output='{}/plots/dfi_mixed5050_{}'.format(mresults_path,
-                                                                  fraction),
-                    top_n=top_n)
+        # Last handle the everything model
+        for fraction in efractions:
+            for target in ['COF', 'intercept']:
+                m_file = f'{emodels_path}/{target}_{fraction}.pickle'
+                f_file = f'{emodels_path}/{target}_{fraction}.ptxt'
+                t_file = f'{etrains_path}/{target}_{fraction}.csv'
+                output = f'{eresults_path}/plots/fi_{target}_{fraction}'
+                plot_feature_importances(model=m_file,
+                                         features=f_file,
+                                         train_df=t_file,
+                                         target=target,
+                                         feature_clusters=fc_path,
+                                         output=output,
+                                         top_n=top_n)
+            plot_double_feature_importances(
+                        COF_model=f'{emodels_path}/COF_{fraction}.pickle',
+                        COF_features=f'{emodels_path}/COF_{fraction}.ptxt',
+                        COF_train_df=f'{etrains_path}/COF_{fraction}.csv',
+                        intercept_model=f'{emodels_path}/intercept_{fraction}.pickle',
+                        intercept_features=f'{emodels_path}/intercept_{fraction}.ptxt',
+                        intercept_train_df=f'{etrains_path}/intercept_{fraction}.csv',
+                        feature_clusters=fc_path,
+                        output=f'{eresults_path}/plots/dfi_everything_{fraction}',
+                        top_n=top_n)
 
-    # Last handle the 2575 model
-    for fraction in efractions:
-        for target in ['COF', 'intercept']:
-            m_file = '{}/{}_{}.pickle'.format(emodels_path, target, fraction)
-            f_file = '{}/{}_{}.ptxt'.format(emodels_path, target, fraction)
-            output = '{}/plots/fi_{}_{}'.format(eresults_path, target, fraction)
-            plot_feature_importances(model=m_file,
-                                     features=f_file,
-                                     feature_clusters=fc_path,
-                                     output=output,
-                                     top_n=top_n)
-        plot_double_feature_importances(
-                    COF_model='{}/COF_{}.pickle'.format(emodels_path, fraction),
-                    COF_features='{}/COF_{}.ptxt'.format(emodels_path, fraction),
-                    intercept_model='{}/intercept_{}.pickle'.format(emodels_path, fraction),
-                    intercept_features='{}/intercept_{}.ptxt'.format(emodels_path, fraction),
-                    feature_clusters=fc_path,
-                    output='{}/plots/dfi_everything_{}'.format(eresults_path,
-                                                                   fraction),
-                    top_n=top_n)
-
-    """Plot simulated vs predicted"""
-    bound_lines = 0.15
-    # First handle the original models
-    for tset in test_sets:
-        for target in ['COF', 'intercept']:
-            oresult = '{}/{}_on_{}.json'.format(
-                        oresults_path,
-                        target,
-                        tset)
-            output = '{}/plots/ps_{}_on_{}'.format(
-                        oresults_path,
-                        target,
-                        tset)
-            plot_simulated_predicted(
-                        predicted_data=oresult,
-                        output=output,
-                        bound_lines=bound_lines)
-
-        plot_double_simulated_predicted(
-                    COF_data='{}/COF_on_{}.json'.format(oresults_path, tset),
-                     intercept_data='{}/intercept_on_{}.json'.format(
-                                                                oresults_path,
-                                                                tset),
-                     output='{}/plots/dps_original_on_{}'.format(
-                                                                oresults_path,
-                                                                tset),
-                     bound_lines=bound_lines)
-
-    # Then handle the 5050 model
-    for fraction in mfractions:
+        """Plot simulated vs predicted"""
+        bound_lines = 0.15
+        # First handle the original models
         for tset in test_sets:
             for target in ['COF', 'intercept']:
-                mresult = '{}/{}_{}_on_{}.json'.format(
-                            mresults_path,
-                            target,
-                            fraction,
-                            tset)
-                output = '{}/plots/ps_{}_{}_on_{}'.format(
-                            mresults_path,
-                            target,
-                            fraction,
-                            tset)
+                oresult = f'{oresults_path}/{target}_on_{tset}.json'
+                output = f'{oresults_path}/plots/ps_{target}_on_{tset}'
                 plot_simulated_predicted(
-                            predicted_data=mresult,
+                            predicted_data=oresult,
                             output=output,
-                            bound_lines=bound_lines)
+                            bound_lines=bound_lines,
+                            alpha=alpha)
 
             plot_double_simulated_predicted(
-                          COF_data='{}/COF_{}_on_{}.json'.format(
-                                                        mresults_path,
-                                                        fraction,
-                                                        tset),
-                         intercept_data='{}/intercept_{}_on_{}.json'.format(
-                                                        mresults_path,
-                                                        fraction,
-                                                        tset),
-                         output='{}/plots/dps_mixed5050_{}_on_{}'.format(
-                                                        mresults_path,
-                                                        fraction,
-                                                        tset),
-                         bound_lines=bound_lines)
+                         COF_data=f'{oresults_path}/COF_on_{tset}.json',
+                         intercept_data=f'{oresults_path}/intercept_on_{tset}.json',
+                         output=f'{oresults_path}/plots/dps_original_on_{tset}',
+                         bound_lines=bound_lines,
+                         alpha=alpha)
 
-    # Last handle the everything set
-    for fraction in efractions:
-        for tset in test_sets:
-            for target in ['COF', 'intercept']:
-                eresult = '{}/{}_{}_on_{}.json'.format(
-                            eresults_path,
-                            target,
-                            fraction,
-                            tset)
-                output = '{}/plots/ps_{}_{}_on_{}'.format(
-                            eresults_path,
-                            target,
-                            fraction,
-                            tset)
-                plot_simulated_predicted(
-                            predicted_data=eresult,
-                            output=output,
-                            bound_lines=bound_lines)
+        # Then handle the 5050 model
+        for fraction in mfractions:
+            for tset in test_sets:
+                for target in ['COF', 'intercept']:
+                    mresult = f'{mresults_path}/{target}_{fraction}_on_{tset}.json'
+                    output = f'{mresults_path}/plots/ps_{target}_{fraction}_on_{tset}'
+                    plot_simulated_predicted(
+                                predicted_data=mresult,
+                                output=output,
+                                bound_lines=bound_lines,
+                                alpha=alpha)
 
-            plot_double_simulated_predicted(
-                          COF_data='{}/COF_{}_on_{}.json'.format(
-                                                        eresults_path,
-                                                        fraction,
-                                                        tset),
-                         intercept_data='{}/intercept_{}_on_{}.json'.format(
-                                                        eresults_path,
-                                                        fraction,
-                                                        tset),
-                         output='{}/plots/dps_everything_{}_on_{}'.format(
-                                                        eresults_path,
-                                                        fraction,
-                                                        tset),
-                         bound_lines=bound_lines)
+                plot_double_simulated_predicted(
+                             COF_data=f'{mresults_path}/COF_{fraction}_on_{tset}.json',
+                             intercept_data=f'{mresults_path}/intercept_{fraction}_on_{tset}.json',
+                             output=f'{mresults_path}/plots/dps_mixed5050_{fraction}_on_{tset}',
+                             bound_lines=bound_lines,
+                             alpha=alpha)
+
+        # Last handle the everything set
+        for fraction in efractions:
+            for tset in test_sets:
+                for target in ['COF', 'intercept']:
+                    eresult = f'{eresults_path}/{target}_{fraction}_on_{tset}.json'
+                    output = f'{eresults_path}/plots/ps_{target}_{fraction}_on_{tset}'
+
+                    plot_simulated_predicted(
+                                predicted_data=eresult,
+                                output=output,
+                                bound_lines=bound_lines,
+                                alpha=alpha)
+
+                plot_double_simulated_predicted(
+                             COF_data=f'{eresults_path}/COF_{fraction}_on_{tset}.json',
+                             intercept_data=f'{eresults_path}/intercept_{fraction}_on_{tset}.json',
+                             output=f'{eresults_path}/plots/dps_everything_{fraction}_on_{tset}',
+                             bound_lines=bound_lines,
+                             alpha=alpha)
