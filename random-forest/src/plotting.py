@@ -550,7 +550,7 @@ def plot_simulated_predicted(predicted_data,
 
     alpha = alpha
     plt.figure(figsize=(10, 8))
-    plt.scatter(results['x'], results['y'], alpha=alpha, marker='.')
+    plt.scatter(results['x'], results['y'], alpha=alpha, marker='o')
     if target == 'COF':
         plt.xlabel('{} (Predicted)'.format(target))
         plt.ylabel('{} (Simulated)'.format(target))
@@ -627,7 +627,7 @@ def plot_double_simulated_predicted(
     plt.title('COF Model', fontsize=28, weight='bold')
     plt.xlabel('COF (Predicted)')
     plt.ylabel('COF (Simulated)')
-    plt.scatter(results['COF']['x'], results['COF']['y'], alpha=alpha, marker='.')
+    plt.scatter(results['COF']['x'], results['COF']['y'], alpha=alpha, marker='o')
     plt.text(x=0.16, y=0.1, s=f'r$^2$={results["COF"]["r_square"]:.3f}', fontsize=28)
     plt.xlim(0.085, 0.2)
     plt.ylim(0.085, 0.2)
@@ -649,7 +649,7 @@ def plot_double_simulated_predicted(
     plt.title('F$_{0}$ Model', fontsize=28, weight='bold')
     plt.xlabel('F$_{0}$ (Predicted), nN')
     plt.ylabel('F$_{0}$ (Simulated), nN')
-    plt.scatter(results['intercept']['x'], results['intercept']['y'], alpha=alpha, marker='.')
+    plt.scatter(results['intercept']['x'], results['intercept']['y'], alpha=alpha, marker='o')
     plt.text(x=5.5, y=0.3, s=f'r$^2$={results["intercept"]["r_square"]:.3f}', fontsize=28)
     plt.xlim(-1, 9)
     plt.ylim(-1, 9)

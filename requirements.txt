@@ -1,0 +1,7 @@
+numpy 
+matplotlib
+json
+pandas 
+cloudpickle == 1.6.0
+pickleshare == 0.7.5
+scikit-learn
