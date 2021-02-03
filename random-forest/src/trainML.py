@@ -55,7 +55,8 @@ def split_df(descriptors_df,
              n_bins, target,
              output_dir,
              n_tset=1,
-             overwrite=False):
+             overwrite=False,
+             predefined_test=None):
     """ From the a descriptors dataframe, save out n_sets evenly distributed df
 
     Parameters
@@ -77,22 +78,32 @@ def split_df(descriptors_df,
         Directory where all the splitted csv is going to be saved out to
     overwrite : bool, optional, default=False
         Option to whether or not overwrite the csv files
+    predefined_test : None or pandas.DataFrame
+        Serve the case when the test set is premade (still need to match with
+        the descriptors_df by index)
     """
     import os
-    binned_target = bin_df(descriptors_df,
-                           n_bins,
-                           target)
-    binned_training = binned_target
-    target_test = pd.DataFrame()
-    target_trainings = dict()
+    if predefined_test is not None:
+        target_test = predefined_test
+        binned_training = bin_df(descriptors_df.drop(target_test.index),
+                                 n_bins,
+                                 target)
 
-    # First create the testing set and drop those columns from
-    # the binned_training set
-    for n in range(n_bins):
-        test_tmp = binned_target[f'{target}_{n}'].sample(frac=test_fraction)
-        target_test = target_test.append(test_tmp)
-        binned_training[f'{target}_{n}'] = binned_training[
-                                           f'{target}_{n}'].drop(test_tmp.index)
+    else:
+        binned_target = bin_df(descriptors_df,
+                               n_bins,
+                               target)
+        binned_training = binned_target
+        target_test = pd.DataFrame()
+        target_trainings = dict()
+
+        # First create the testing set and drop those columns from
+        # the binned_training set
+        for n in range(n_bins):
+            test_tmp = binned_target[f'{target}_{n}'].sample(frac=test_fraction)
+            target_test = target_test.append(test_tmp)
+            binned_training[f'{target}_{n}'] = binned_training[
+                                               f'{target}_{n}'].drop(test_tmp.index)
     print(f'Saving out to {output_dir}/test_set.csv')
     target_test.to_csv(f'{output_dir}/test_set.csv')
 
@@ -248,16 +259,6 @@ if __name__ == '__main__':
 
 
     for target in ['COF', 'intercept']:
-        split_df(descriptors_df=mixed5050,
-                                test_fraction=0.2,
-                                training_fractions=[0.05, 0.1, 0.2,
-                                                   0.3, 0.5, 0.7, 1],
-                                n_bins=6,
-                                target=target,
-                                output_dir=splitted5050_path,
-                                n_tset =5,
-                                overwrite=overwrite)
-
         split_df(descriptors_df=everything,
                                 test_fraction=0.2,
                                 training_fractions=[0.01, 0.02, 0.03, 0.05, 0.1,
@@ -267,6 +268,19 @@ if __name__ == '__main__':
                                 output_dir=splitted_everything_path,
                                 n_tset=5,
                                 overwrite=overwrite)
+
+        everything_test = pd.read_csv(f'{splitted_everything_path}/test_set.csv', index_col=0)
+        predefined_5050_test = everything_test[everything_test['frac-1']==0.5]
+        split_df(descriptors_df=mixed5050,
+                                test_fraction=0.2,
+                                training_fractions=[0.05, 0.1, 0.2,
+                                                   0.3, 0.5, 0.7, 1],
+                                n_bins=6,
+                                target=target,
+                                output_dir=splitted5050_path,
+                                n_tset =5,
+                                overwrite=overwrite,
+                                predefined_test=predefined_5050_test)
 
 
 
