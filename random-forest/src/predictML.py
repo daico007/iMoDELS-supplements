@@ -134,7 +134,7 @@ def evaluate_model(test_df, model, target, features, descriptors, output_path):
         test_df = pd.read_csv(test_df)
     if isinstance(model, str):
         with open(model, 'rb') as f:
-            model = pickle.load(fmodel)
+            model = pickle.load(f)
     if isinstance(features, str):
         with open(features, 'rb') as f:
             fearures = pickle.load(f)
@@ -177,58 +177,64 @@ def evaluate_model(test_df, model, target, features, descriptors, output_path):
 
 if __name__ == '__main__':
     # Define paths for data, model, test, and output
-    for i in range(5):
-        oresults_path = f'../predicted-results/original'
-        mresults_path = f'../predicted-results/mixed5050/set_{i}'
-        eresults_path = f'../predicted-results/everything/set_{i}'
+    for bins in [10]:
+        for i in range(5):
+            for path in [f'../predicted-results/original/nbins-{bins}',
+                         f'../predicted-results/mixed5050/nbins-{bins}',
+                         f'../predicted-results/everything/nbins-{bins}']:
+                if not os.path.isdir(path):
+                    os.mkdir(path)
+            oresults_path = f'../predicted-results/original/nbins-{bins}'
+            mresults_path = f'../predicted-results/mixed5050/nbins-{bins}/set_{i}'
+            eresults_path = f'../predicted-results/everything/nbins-{bins}/set_{i}'
 
-        omodels_path = f'../models/original/'
-        mmodels_path = f'../models/mixed5050/set_{i}'
-        emodels_path = f'../models/everything/set_{i}'
+            omodels_path = f'../models/original/'
+            mmodels_path = f'../models/mixed5050/nbins-{bins}/set_{i}'
+            emodels_path = f'../models/everything/nbins-{bins}/set_{i}'
 
-        models_results = {omodels_path : oresults_path,
-                        mmodels_path : mresults_path,
-                        emodels_path : eresults_path
-                        }
+            models_results = {omodels_path : oresults_path,
+                            mmodels_path : mresults_path,
+                            emodels_path : eresults_path
+                            }
 
-        test_5050_path = f'../../data/splitted-data/mixed5050/test_set.csv'
-        test_2575_path = f'../../data/splitted-data/mixed2575/test_set.csv'
-        test_everything_path = f'../../data/splitted-data/everything/test_set.csv'
+            test_5050_path = f'../../data/splitted-data/mixed5050/nbins-{bins}/test_set.csv'
+            test_2575_path = f'../../data/splitted-data/mixed2575/nbins-{bins}/test_set.csv'
+            test_everything_path = f'../../data/splitted-data/everything/nbins-{bins}/test_set.csv'
 
-        test_5050 = pd.read_csv(test_5050_path, index_col=0)
-        test_2575 = pd.read_csv(test_2575_path, index_col=0)
-        test_everything = pd.read_csv(test_everything_path, index_col=0)
+            test_5050 = pd.read_csv(test_5050_path, index_col=0)
+            test_2575 = pd.read_csv(test_2575_path, index_col=0)
+            test_everything = pd.read_csv(test_everything_path, index_col=0)
 
-        tests = {'5050' : test_5050,
-                 '2575' : test_2575,
-                 'everything' : test_everything
-                }
+            tests = {'5050' : test_5050,
+                     '2575' : test_2575,
+                     'everything' : test_everything
+                    }
 
-        for path in models_results:
-            for entry in os.scandir(path):
-                # Ouput dir is models specific (original, 5050, everything)
-                output_path = models_results[path]
-                if entry.name.endswith('pickle'):
-                    if 'intercept' in entry.name:
-                        target = 'intercept'
-                    elif 'COF' in entry.name:
-                        target = 'COF'
+            for path in models_results:
+                for entry in os.scandir(path):
+                    # Ouput dir is models specific (original, 5050, everything)
+                    output_path = models_results[path]
+                    if entry.name.endswith('pickle'):
+                        if 'intercept' in entry.name:
+                            target = 'intercept'
+                        elif 'COF' in entry.name:
+                            target = 'COF'
 
-                    name = os.path.splitext(entry.name)[0]
-                    features_path = f'{path}/{name}.ptxt'
+                        name = os.path.splitext(entry.name)[0]
+                        features_path = f'{path}/{name}.ptxt'
 
-                    # Load model and features
-                    with open(entry.path, 'rb') as fmodel:
-                        model = pickle.load(fmodel)
-                    with open(features_path, 'rb') as ffeatures:
-                        features = pickle.load(ffeatures)
+                        # Load model and features
+                        with open(entry.path, 'rb') as fmodel:
+                            model = pickle.load(fmodel)
+                        with open(features_path, 'rb') as ffeatures:
+                            features = pickle.load(ffeatures)
 
-                    # Throw everything to the evaluation method
-                    for test_name, test_set in tests.items():
-                        output = f'{output_path}/{name}_on_{test_name}.json'
-                        evaluate_model(test_df=test_set,
-                                       model=model,
-                                       target=target,
-                                       features=features,
-                                       descriptors=None,
-                                       output_path=output)
+                        # Throw everything to the evaluation method
+                        for test_name, test_set in tests.items():
+                            output = f'{output_path}/{name}_on_{test_name}.json'
+                            evaluate_model(test_df=test_set,
+                                           model=model,
+                                           target=target,
+                                           features=features,
+                                           descriptors=None,
+                                           output_path=output)

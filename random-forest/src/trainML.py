@@ -50,39 +50,67 @@ def bin_df(descriptors_df, n_bins, target):
 
 
 def split_df(descriptors_df,
-             test_fraction,
-             training_fractions,
-             n_bins, target,
+             n_bins,
+             target,
              output_dir,
+             test_fraction=None,
+             test_points=None,
+             opt_in_test=None,
+             training_fractions=None,
+             training_points=None,
              n_tset=1,
              overwrite=False,
-             predefined_test=None):
+             predefined_test=None,
+             seed=-1):
     """ From the a descriptors dataframe, save out n_sets evenly distributed df
 
     Parameters
     ----------
     descriptors_df: pandas.DataFrame
         the data to be splitted
-    test_fraction : floatd
-        Fraction of the input data set that is used exclusively
-        for testing. This portion will be removed to create
-        a training set, which will be used for to create
-        different training set with different fractions
-    training_fractions : list of float
-        Fractions of the training data set that is going to be saved out to.
-        For example [0.1, 0.3, 0.5, 0.8, 1] will save out 5 files
-        with 10%, 30%, 50%, 80% and 100% of the grand data set, respectively.
+    n_bins : int
+        Number of bins to split the data into
     target : str
         Target columns that we want to split (evenly distribution criteria)
     output_dir : str
         Directory where all the splitted csv is going to be saved out to
+    test_fraction : float or None
+        Fraction of the input data set that is used exclusively
+        for testing. This portion will be removed to create
+        a training set, which will be used for to create
+        different training set with different fractions
+    test_points : int or None
+        Number of data points that we want to use and create the testing set,
+        must be less than the provided data set.
+        Can be used in place of the test_fraction variable (one or the other)
+    opt_in_test : pd.DataFrametest , optional, default=None
+        Dataframe with the optimal systems, everything matched by index.
+        Hence, the top DF need be created from the same csv and preserve the
+        idx.
+    training_fractions : list of float or None
+        Fractions of the training data set that is going to be saved out to.
+        For example [0.1, 0.3, 0.5, 0.8, 1] will save out 5 files
+        with 10%, 30%, 50%, 80% and 100% of the grand data set, respectively.
+    training_points : list of int or None
+        Number of training data of each data set, must be less than the provided
+        data set (after carving out the testing set)
+        Can be used in place of the test_fraction variable (one or the other).
+        Note: if the maximum of training points is greater that the provided
+        data set (after carving out the testing set), this method will create a
+        training set with everything.
     overwrite : bool, optional, default=False
         Option to whether or not overwrite the csv files
     predefined_test : None or pandas.DataFrame
         Serve the case when the test set is premade (still need to match with
-        the descriptors_df by index)
+        the descriptors_df by index). Override test_fraction and test_points
     """
     import os
+    if test_fraction:
+        assert not test_points
+    if training_fractions:
+        assert not training_points
+
+
     if predefined_test is not None:
         target_test = predefined_test
         binned_training = bin_df(descriptors_df.drop(target_test.index),
@@ -90,19 +118,33 @@ def split_df(descriptors_df,
                                  target)
 
     else:
+        target_test = pd.DataFrame()
+        target_trainings = dict()
+
+        if opt_in_test is not None:
+            # Consider switching to search by identifiers later
+            target_test = target_test.append(descriptors_df.loc[opt_in_test.index.to_list()])
+            descriptors_df.drop(opt_in_test.index, inplace=True)
+
         binned_target = bin_df(descriptors_df,
                                n_bins,
                                target)
         binned_training = binned_target
-        target_test = pd.DataFrame()
-        target_trainings = dict()
 
         # First create the testing set and drop those columns from
         # the binned_training set
-        for n in range(n_bins):
-            test_tmp = binned_target[f'{target}_{n}'].sample(frac=test_fraction)
-            target_test = target_test.append(test_tmp)
-            binned_training[f'{target}_{n}'] = binned_training[
+        if test_fraction:
+            for n in range(n_bins):
+                test_tmp = binned_target[f'{target}_{n}'].sample(frac=test_fraction, random_state=seed[0])
+                test_tmp = test_tmp.drop(test_tmp[test_tmp['terminal_group_1']==test_tmp['terminal_group_2']].index)
+                target_test = target_test.append(test_tmp)
+                binned_training[f'{target}_{n}'] = binned_training[
+                                               f'{target}_{n}'].drop(test_tmp.index)
+        elif test_points:
+            for n in range(n_bins):
+                test_tmp = binned_target[f'{target}_{n}'].sample(n=int(test_points/n_bins), random_state=seed[0])
+                target_test = target_test.append(test_tmp)
+                binned_training[f'{target}_{n}'] = binned_training[
                                                f'{target}_{n}'].drop(test_tmp.index)
     print(f'Saving out to {output_dir}/test_set.csv')
     target_test.to_csv(f'{output_dir}/test_set.csv')
@@ -114,32 +156,72 @@ def split_df(descriptors_df,
         if not os.path.isdir(path):
             os.mkdir(path)
         final_target[f'set_{i}'] = dict()
-        for fraction in training_fractions:
-            final_target[f'set_{i}'][f'{target}_{fraction}'] = pd.DataFrame()
-            for n in range(n_bins):
-                final_target[f'set_{i}'][f'{target}_{fraction}'] = final_target[
-                    f'set_{i}'][f'{target}_{fraction}'].append(binned_training[
-                    f'{target}_{n}'].sample(frac=fraction))
-            # Need overwrite option check (use os.path.isfile)
-            # Raise warning (or print something out) and do nothing
-            # Saving out the training csv
-            filename = f'{path}/{target}_{fraction}.csv'
+        if training_fractions:
+            for fraction in training_fractions:
+                final_target[f'set_{i}'][f'{target}_{fraction}'] = pd.DataFrame()
+                for n in range(n_bins):
+                    final_target[f'set_{i}'][f'{target}_{fraction}'] = final_target[
+                        f'set_{i}'][f'{target}_{fraction}'].append(binned_training[
+                        f'{target}_{n}'].sample(frac=fraction, random_state=seed[i]))
+                # Need overwrite option check (use os.path.isfile)
+                # Raise warning (or print something out) and do nothing
+                # Saving out the training csv
+                filename = f'{path}/{target}_{fraction}.csv'
 
-            if overwrite:
-                write_csv = True
-            else:
-                import os
-                if not os.path.isfile(filename):
+                if overwrite:
                     write_csv = True
                 else:
-                    write_csv = False
+                    import os
+                    if not os.path.isfile(filename):
+                        write_csv = True
+                    else:
+                        write_csv = False
 
-            if write_csv:
-                print(f'Saving out to {filename}')
-                final_target[f'set_{i}'][f'{target}_{fraction}'].to_csv(filename)
+                if write_csv:
+                    print(f'Saving out to {filename}')
+                    final_target[f'set_{i}'][f'{target}_{fraction}'].to_csv(filename)
+                else:
+                    continue
 
-            else:
-                continue
+        elif training_points:
+            for points in training_points:
+                try:
+                    final_target[f'set_{i}'][f'{target}_{points}'] = pd.DataFrame()
+                    for n in range(n_bins):
+                        final_target[f'set_{i}'][f'{target}_{points}'] = final_target[
+                            f'set_{i}'][f'{target}_{points}'].append(binned_training[
+                            f'{target}_{n}'].sample(n=int(points/n_bins), random_state=seed[i]))
+                    # Need overwrite option check (use os.path.isfile)
+                    # Raise warning (or print something out) and do nothing
+                    # Saving out the training csv
+                    filename = f'{path}/{target}_{points}.csv'
+                except:
+                    # if training_points is more than what the training set have,
+                    # just create a set with all the data
+                    final_target[f'set_{i}'][f'{target}_{points}'] = pd.DataFrame()
+                    for n in range(n_bins):
+                        final_target[f'set_{i}'][f'{target}_{points}'] = final_target[
+                            f'set_{i}'][f'{target}_{points}'].append(binned_training[
+                            f'{target}_{n}'].sample(frac=1, random_state=seed[i]))
+                    # Need overwrite option check (use os.path.isfile)
+                    # Raise warning (or print something out) and do nothing
+                    # Saving out the training csv
+                    filename = f'{path}/{target}_all.csv'
+
+                if overwrite:
+                    write_csv = True
+                else:
+                    import os
+                    if not os.path.isfile(filename):
+                        write_csv = True
+                    else:
+                        write_csv = False
+
+                if write_csv:
+                    print(f'Saving out to {filename}')
+                    final_target[f'set_{i}'][f'{target}_{points}'].to_csv(filename)
+                else:
+                    continue
 
     return {'test_set': target_test,
             'train_set': final_target}
@@ -192,15 +274,17 @@ def train_rf(data, target, output_path,
             tmp_df = data
         loaded_df = loaded_df.append(data, ignore_index=True)
 
+    '''
     to_drop = ['pc+-mean', 'pc+-diff',
                'pc+-min', 'pc+-max',
                'pc--mean', 'pc--diff',
                'pc--min', 'pc--max']
-
+    '''
+    std = ['COF-std', 'intercept-std']
     # Reduce the number of features by running them thorugh the original
     # dimensionality_reduction by Andrew,
     # Will used the new dimensionality reduction in later version
-    features = list(loaded_df.drop(targets + identifiers, axis=1))
+    features = list(loaded_df.drop(targets + identifiers + std, axis=1))
     df_red_train = dimensionality_reduction(loaded_df, features,
                             filter_missing=True,
                             filter_var=True,
@@ -208,7 +292,7 @@ def train_rf(data, target, output_path,
                             missing_threshold=0.4,
                             var_threshold=0.02,
                             corr_threshold=0.9)
-    red_features = list(df_red_train.drop(targets + identifiers, axis=1))
+    red_features = list(df_red_train.drop(targets + identifiers + std, axis=1))
 
     X_train, y_train = df_red_train[red_features], df_red_train[target]
     regr = ensemble.RandomForestRegressor(
@@ -246,98 +330,109 @@ def train_rf(data, target, output_path,
 
 if __name__ == '__main__':
     overwrite = True
-    """ Split the 50-50 mixed df and the everything df"""
-    mixed5050 = pd.read_csv('../../data/raw-data/skimmed-mixed-50-50.csv', index_col=0)
-    everything = pd.read_csv('../../data/raw-data/everything.csv', index_col=0)
+    for bins in [10]:
+        """ Split the 50-50 mixed df and the everything df"""
+        mixed5050 = pd.read_csv('../../data/raw-data/mixed-50-50.csv', index_col=0)
+        everything = pd.read_csv('../../data/raw-data/everything.csv', index_col=0)
+        top_sys = pd.read_csv('../../data/raw-data/opt_22_raw.csv', index_col=0)
 
-    splitted5050_path = '../../data/splitted-data/mixed5050'
-    splitted_everything_path = '../../data/splitted-data/everything'
+        splitted5050_path = f'../../data/splitted-data/mixed5050/nbins-{bins}'
+        splitted2575_path = f'../../data/splitted-data/mixed2575/nbins-{bins}'
+        splitted_everything_path = f'../../data/splitted-data/everything/nbins-{bins}'
 
-    """ Only need to run this block once to create splitted data set
-    Can just load data from file the next time
-    """
+        for path in [splitted5050_path, splitted2575_path, splitted_everything_path]:
+            if not os.path.isdir(path):
+                os.mkdir(path)
 
-
-    for target in ['COF', 'intercept']:
-        split_df(descriptors_df=everything,
-                                test_fraction=0.2,
-                                training_fractions=[0.01, 0.02, 0.03, 0.05, 0.1,
-                                                   0.2, 0.3, 0.5, 0.7, 1],
-                                n_bins=6,
-                                target=target,
-                                output_dir=splitted_everything_path,
-                                n_tset=5,
-                                overwrite=overwrite)
-
-        everything_test = pd.read_csv(f'{splitted_everything_path}/test_set.csv', index_col=0)
-        predefined_5050_test = everything_test[everything_test['frac-1']==0.5]
-        split_df(descriptors_df=mixed5050,
-                                test_fraction=0.2,
-                                training_fractions=[0.05, 0.1, 0.2,
-                                                   0.3, 0.5, 0.7, 1],
-                                n_bins=6,
-                                target=target,
-                                output_dir=splitted5050_path,
-                                n_tset =5,
-                                overwrite=overwrite,
-                                predefined_test=predefined_5050_test)
-
-
-
-    splitted5050 = dict()
-    splitted_everything = dict()
-
-    for i in range(5):
-        splitted5050[i] = {'COF': {'train_set': dict(), 'test_set': None},
-            'intercept': {'train_set': dict(), 'test_set': None}}
-        splitted_everything[i] = {'COF': {'train_set': dict(), 'test_set': None},
-            'intercept': {'train_set': dict(), 'test_set': None}}
-        mfractions = [0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1]
-        efractions = [0.01, 0.02, 0.03, 0.05, 0.1,
-                      0.2, 0.3, 0.5, 0.7, 1]
+        """ Only need to run this block once to create splitted data set
+        Can just load data from file the next time
+        """
         for target in ['COF', 'intercept']:
-            for fraction in mfractions:
-                model_name = '{}_{}'.format(target, fraction)
-                filename = '{}/set_{}/{}.csv'.format(splitted5050_path, i,
-                                              model_name)
-                splitted5050[i][target]['train_set'][model_name] = pd.read_csv(filename, index_col=0)
-            #tfilename = '{}/test_set.csv'.format(splitted5050_path, i)
-            #splitted5050[i][target]['COF_test'] = pd.read_csv(tfilename, index_col=0)
+            split_df(descriptors_df=everything.copy(deep=True),
+                                    test_fraction=0.2,
+                                    opt_in_test=top_sys,
+                                    training_points=[100, 200, 300, 500, 1000, 1500,
+                                                     2000, 2500, 4000, 6000, 8000],
+                                    n_bins=bins,
+                                    target=target,
+                                    output_dir=splitted_everything_path,
+                                    n_tset=5,
+                                    seed=[1, 10, 49, 79, 91],
+                                    overwrite=overwrite)
 
-        for target in ['COF', 'intercept']:
-            for fraction in efractions:
-                model_name = '{}_{}'.format(target, fraction)
-                filename = '{}/set_{}/{}.csv'.format(splitted_everything_path, i,
-                                              model_name)
-                splitted_everything[i][target]['train_set'][model_name] = pd.read_csv(filename, index_col=0)
-            #tfilename = '{}/test_set.csv'.format(splitted5050_path, i)
-            #splitted_everything[i][target]['test_set'] = pd.read_csv(tfilename, index_col=0)
+            everything_test = pd.read_csv(f'{splitted_everything_path}/test_set.csv', index_col=0)
+            predefined_5050_test = everything_test[everything_test['frac-1']==0.5]
+            predefined_2575_test = everything_test[everything_test['frac-1']==0.25]
+            predefined_2575_test.to_csv(f'{splitted2575_path}/test_set.csv')
+            split_df(descriptors_df=mixed5050.copy(deep=True),
+                                    training_points=[100, 200, 300, 500, 1000, 1500,
+                                                       2000, 2500, 3000],
+                                    n_bins=10,
+                                    target=target,
+                                    output_dir=splitted5050_path,
+                                    n_tset =5,
+                                    seed=[1, 10, 49, 79, 91],
+                                    overwrite=overwrite,
+                                    predefined_test=predefined_5050_test)
 
-        """ Train the models"""
-        original_csv = pd.read_csv('../../data/raw-data/original-100.csv', index_col=0)
-        original_models = dict()
-        mixed5050_models = dict()
-        everything_models = dict()
-        for target in ['COF', 'intercept']:
-            # Train the original models
-            omodel_path = '../models/original/{}'.format(target)
-            original_models[target] = train_rf(data=original_csv,
-                         target=target,
-                         output_path=omodel_path,
-                         overwrite=overwrite)
-            # Train the mixed5050 models
-            for model in splitted5050[i][target]['train_set']:
-                m5model_path = '../models/mixed5050/set_{}/{}'.format(i, model)
-                mixed5050_models[model] = train_rf(data=splitted5050[i][target]['train_set'][model],
+        splitted5050 = dict()
+        splitted_everything = dict()
+
+        for i in range(5):
+            splitted5050[i] = {'COF': {'train_set': dict(), 'test_set': None},
+                'intercept': {'train_set': dict(), 'test_set': None}}
+            splitted_everything[i] = {'COF': {'train_set': dict(), 'test_set': None},
+                'intercept': {'train_set': dict(), 'test_set': None}}
+            e_points = [100, 200, 300, 500, 1000, 1500,
+                        2000, 2500, 4000, 6000, 'all']
+            m_points = [100, 200, 300, 500, 1000, 1500,
+                        2000, 2500, 'all']
+            for target in ['COF', 'intercept']:
+                for point in m_points:
+                    model_name = f'{target}_{point}'
+                    filename = f'{splitted5050_path}/set_{i}/{model_name}.csv'
+                    splitted5050[i][target]['train_set'][model_name] = pd.read_csv(filename, index_col=0)
+                #tfilename = '{}/test_set.csv'.format(splitted5050_path, i)
+                #splitted5050[i][target]['COF_test'] = pd.read_csv(tfilename, index_col=0)
+
+            for target in ['COF', 'intercept']:
+                for point in e_points:
+                    model_name = f'{target}_{point}'
+                    filename = f'{splitted_everything_path}/set_{i}/{model_name}.csv'
+                    splitted_everything[i][target]['train_set'][model_name] = pd.read_csv(filename, index_col=0)
+                #tfilename = '{}/test_set.csv'.format(splitted5050_path, i)
+                #splitted_everything[i][target]['test_set'] = pd.read_csv(tfilename, index_col=0)
+
+            """ Train the models"""
+            original_csv = pd.read_csv('../../data/raw-data/original-100.csv', index_col=0)
+            original_models = dict()
+            mixed5050_models = dict()
+            everything_models = dict()
+            for target in ['COF', 'intercept']:
+                # Train the original models
+                omodel_path = '../models/original/{}'.format(target)
+                original_models[target] = train_rf(data=original_csv,
                              target=target,
-                             output_path=m5model_path,
+                             output_path=omodel_path,
                              overwrite=overwrite)
-            # Train the everything model
-            for model in splitted_everything[i][target]['train_set']:
-                emodel_path = '../models/everything/set_{}/{}'.format(i, model)
-                everything_models[model] = train_rf(
-                            data=splitted_everything[i][target]['train_set'][model],
-                            target=target,
-                            output_path=emodel_path,
-                            overwrite=overwrite)
-
+                # Train the mixed5050 models
+                for model in splitted5050[i][target]['train_set']:
+                    m5binspath = f'../models/mixed5050/nbins-{bins}'
+                    if not os.path.isdir(m5binspath):
+                        os.mkdir(m5binspath)
+                    m5model_path = f'../models/mixed5050/nbins-{bins}/set_{i}/{model}'
+                    mixed5050_models[model] = train_rf(data=splitted5050[i][target]['train_set'][model],
+                                 target=target,
+                                 output_path=m5model_path,
+                                 overwrite=overwrite)
+                # Train the everything model
+                for model in splitted_everything[i][target]['train_set']:
+                    ebinspath = f'../models/everything/nbins-{bins}'
+                    if not os.path.isdir(ebinspath):
+                        os.mkdir(ebinspath)
+                    emodel_path = f'../models/everything/nbins-{bins}/set_{i}/{model}'
+                    everything_models[model] = train_rf(
+                                data=splitted_everything[i][target]['train_set'][model],
+                                target=target,
+                                output_path=emodel_path,
+                                overwrite=overwrite)

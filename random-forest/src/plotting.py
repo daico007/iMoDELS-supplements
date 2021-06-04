@@ -674,164 +674,163 @@ def plot_double_simulated_predicted(
 if __name__ == '__main__':
     fc_path = 'feature-clusters.json'
     alpha=0.1
-    for i in range(5):
-        oresults_path = f'../predicted-results/original'
-        mresults_path = f'../predicted-results/mixed5050/set_{i}'
-        eresults_path = f'../predicted-results/everything/set_{i}'
+    for bins in [10]:
+        for i in range(5):
+            oresults_path = f'../predicted-results/original/nbins-{bins}'
+            mresults_path = f'../predicted-results/mixed5050/nbins-{bins}/set_{i}'
+            eresults_path = f'../predicted-results/everything/nbins-{bins}/set_{i}'
 
-        for path in [oresults_path, mresults_path, eresults_path]:
-            if not os.path.isdir(f'{path}/plots'):
-                os.mkdir(f'{path}/plots')
+            for path in [oresults_path, mresults_path, eresults_path]:
+                if not os.path.isdir(f'{path}/plots'):
+                    os.mkdir(f'{path}/plots')
 
-        omodels_path = f'../models/original'
-        mmodels_path = f'../models/mixed5050/set_{i}'
-        emodels_path = f'../models/everything/set_{i}'
+            omodels_path = f'../models/original'
+            mmodels_path = f'../models/mixed5050/nbins-{bins}/set_{i}'
+            emodels_path = f'../models/everything/nbins-{bins}/set_{i}'
 
-        otrains_path = f'../../data/raw-data'
-        mtrains_path = f'../../data/splitted-data/mixed5050/set_{i}'
-        etrains_path = f'../../data/splitted-data/everything/set_{i}'
+            otrains_path = f'../../data/raw-data'
+            mtrains_path = f'../../data/splitted-data/mixed5050/nbins-{bins}/set_{i}'
+            etrains_path = f'../../data/splitted-data/everything/nbins-{bins}/set_{i}'
 
-        mfractions = [0.05, 0.1, 0.2,
-                      0.3, 0.5, 0.7, 1]
-        efractions = [0.01, 0.02, 0.03,
-                     0.05, 0.1, 0.2, 0.3,
-                     0.5, 0.7, 1]
+            epoints = [100, 200, 300, 500, 1000, 1500,
+                        2000, 2500, 4000, 6000, 'all']
+            mpoints = [100, 200, 300, 500, 1000, 1500,
+                        2000, 2500, 'all']
+            test_sets = ['5050', '2575', 'everything']
 
-        test_sets = ['5050', '2575', 'everything']
+            """Plot feature importances"""
+            top_n = 8
 
-        """Plot feature importances"""
-        top_n = 8
+            # First handle the original models
+            for target in ['COF', 'intercept']:
+                m_file = f'{omodels_path}/{target}.pickle'
+                f_file = f'{omodels_path}/{target}.ptxt'
+                t_file = f'{otrains_path}/original-100.csv'
+                output = f'{oresults_path}/plots/fi_{target}'
 
-        # First handle the original models
-        for target in ['COF', 'intercept']:
-            m_file = f'{omodels_path}/{target}.pickle'
-            f_file = f'{omodels_path}/{target}.ptxt'
-            t_file = f'{otrains_path}/original-100.csv'
-            output = f'{oresults_path}/plots/fi_{target}'
+                plot_feature_importances(model=m_file,
+                                         features=f_file,
+                                         train_df=t_file,
+                                         target=target,
+                                         feature_clusters=fc_path,
+                                         output=output,
+                                         top_n=top_n)
+            plot_double_feature_importances(
+                                COF_model=f'{omodels_path}/COF.pickle',
+                                COF_features=f'{omodels_path}/COF.ptxt',
+                                COF_train_df=f'{otrains_path}/original-100.csv',
+                                intercept_model=f'{omodels_path}/intercept.pickle',
+                                intercept_features=f'{omodels_path}/intercept.ptxt',
+                                intercept_train_df=f'{otrains_path}/original-100.csv',
+                                feature_clusters=fc_path,
+                                output=f'{oresults_path}/plots/dfi_original',
+                                top_n=top_n)
 
-            plot_feature_importances(model=m_file,
-                                     features=f_file,
-                                     train_df=t_file,
-                                     target=target,
-                                     feature_clusters=fc_path,
-                                     output=output,
-                                     top_n=top_n)
-        plot_double_feature_importances(
-                            COF_model=f'{omodels_path}/COF.pickle',
-                            COF_features=f'{omodels_path}/COF.ptxt',
-                            COF_train_df=f'{otrains_path}/original-100.csv',
-                            intercept_model=f'{omodels_path}/intercept.pickle',
-                            intercept_features=f'{omodels_path}/intercept.ptxt',
-                            intercept_train_df=f'{otrains_path}/original-100.csv',
+            # Then handle the 5050 model
+            for points in mpoints:
+                for target in ['COF', 'intercept']:
+                    m_file = f'{mmodels_path}/{target}_{points}.pickle'
+                    f_file = f'{mmodels_path}/{target}_{points}.ptxt'
+                    t_file = f'{mtrains_path}/{target}_{points}.csv'
+                    output = f'{mresults_path}/plots/fi_{target}_{points}'
+                    plot_feature_importances(model=m_file,
+                                             train_df=t_file,
+                                             target=target,
+                                             features=f_file,
+                                             feature_clusters=fc_path,
+                                             output=output,
+                                             top_n=top_n)
+                plot_double_feature_importances(
+                            COF_model=f'{mmodels_path}/COF_{points}.pickle',
+                            COF_features=f'{mmodels_path}/COF_{points}.ptxt',
+                            COF_train_df=f'{mtrains_path}/COF_{points}.csv',
+                            intercept_model=f'{mmodels_path}/intercept_{points}.pickle',
+                            intercept_features=f'{mmodels_path}/intercept_{points}.ptxt',
+                            intercept_train_df=f'{mtrains_path}/intercept_{points}.csv',
                             feature_clusters=fc_path,
-                            output=f'{oresults_path}/plots/dfi_original',
+                            output=f'{mresults_path}/plots/dfi_mixed5050_{points}',
                             top_n=top_n)
 
-        # Then handle the 5050 model
-        for fraction in mfractions:
-            for target in ['COF', 'intercept']:
-                m_file = f'{mmodels_path}/{target}_{fraction}.pickle'
-                f_file = f'{mmodels_path}/{target}_{fraction}.ptxt'
-                t_file = f'{mtrains_path}/{target}_{fraction}.csv'
-                output = f'{mresults_path}/plots/fi_{target}_{fraction}'
-                plot_feature_importances(model=m_file,
-                                         train_df=t_file,
-                                         target=target,
-                                         features=f_file,
-                                         feature_clusters=fc_path,
-                                         output=output,
-                                         top_n=top_n)
-            plot_double_feature_importances(
-                        COF_model=f'{mmodels_path}/COF_{fraction}.pickle',
-                        COF_features=f'{mmodels_path}/COF_{fraction}.ptxt',
-                        COF_train_df=f'{mtrains_path}/COF_{fraction}.csv',
-                        intercept_model=f'{mmodels_path}/intercept_{fraction}.pickle',
-                        intercept_features=f'{mmodels_path}/intercept_{fraction}.ptxt',
-                        intercept_train_df=f'{mtrains_path}/intercept_{fraction}.csv',
-                        feature_clusters=fc_path,
-                        output=f'{mresults_path}/plots/dfi_mixed5050_{fraction}',
-                        top_n=top_n)
+            # Last handle the everything model
+            for points in epoints:
+                for target in ['COF', 'intercept']:
+                    m_file = f'{emodels_path}/{target}_{points}.pickle'
+                    f_file = f'{emodels_path}/{target}_{points}.ptxt'
+                    t_file = f'{etrains_path}/{target}_{points}.csv'
+                    output = f'{eresults_path}/plots/fi_{target}_{points}'
+                    plot_feature_importances(model=m_file,
+                                             features=f_file,
+                                             train_df=t_file,
+                                             target=target,
+                                             feature_clusters=fc_path,
+                                             output=output,
+                                             top_n=top_n)
+                plot_double_feature_importances(
+                            COF_model=f'{emodels_path}/COF_{points}.pickle',
+                            COF_features=f'{emodels_path}/COF_{points}.ptxt',
+                            COF_train_df=f'{etrains_path}/COF_{points}.csv',
+                            intercept_model=f'{emodels_path}/intercept_{points}.pickle',
+                            intercept_features=f'{emodels_path}/intercept_{points}.ptxt',
+                            intercept_train_df=f'{etrains_path}/intercept_{points}.csv',
+                            feature_clusters=fc_path,
+                            output=f'{eresults_path}/plots/dfi_everything_{points}',
+                            top_n=top_n)
 
-        # Last handle the everything model
-        for fraction in efractions:
-            for target in ['COF', 'intercept']:
-                m_file = f'{emodels_path}/{target}_{fraction}.pickle'
-                f_file = f'{emodels_path}/{target}_{fraction}.ptxt'
-                t_file = f'{etrains_path}/{target}_{fraction}.csv'
-                output = f'{eresults_path}/plots/fi_{target}_{fraction}'
-                plot_feature_importances(model=m_file,
-                                         features=f_file,
-                                         train_df=t_file,
-                                         target=target,
-                                         feature_clusters=fc_path,
-                                         output=output,
-                                         top_n=top_n)
-            plot_double_feature_importances(
-                        COF_model=f'{emodels_path}/COF_{fraction}.pickle',
-                        COF_features=f'{emodels_path}/COF_{fraction}.ptxt',
-                        COF_train_df=f'{etrains_path}/COF_{fraction}.csv',
-                        intercept_model=f'{emodels_path}/intercept_{fraction}.pickle',
-                        intercept_features=f'{emodels_path}/intercept_{fraction}.ptxt',
-                        intercept_train_df=f'{etrains_path}/intercept_{fraction}.csv',
-                        feature_clusters=fc_path,
-                        output=f'{eresults_path}/plots/dfi_everything_{fraction}',
-                        top_n=top_n)
-
-        """Plot simulated vs predicted"""
-        bound_lines = 0.15
-        # First handle the original models
-        for tset in test_sets:
-            for target in ['COF', 'intercept']:
-                oresult = f'{oresults_path}/{target}_on_{tset}.json'
-                output = f'{oresults_path}/plots/ps_{target}_on_{tset}'
-                plot_simulated_predicted(
-                            predicted_data=oresult,
-                            output=output,
-                            bound_lines=bound_lines,
-                            alpha=alpha)
-
-            plot_double_simulated_predicted(
-                         COF_data=f'{oresults_path}/COF_on_{tset}.json',
-                         intercept_data=f'{oresults_path}/intercept_on_{tset}.json',
-                         output=f'{oresults_path}/plots/dps_original_on_{tset}',
-                         bound_lines=bound_lines,
-                         alpha=alpha)
-
-        # Then handle the 5050 model
-        for fraction in mfractions:
+            """Plot simulated vs predicted"""
+            bound_lines = 0.15
+            # First handle the original models
             for tset in test_sets:
                 for target in ['COF', 'intercept']:
-                    mresult = f'{mresults_path}/{target}_{fraction}_on_{tset}.json'
-                    output = f'{mresults_path}/plots/ps_{target}_{fraction}_on_{tset}'
+                    oresult = f'{oresults_path}/{target}_on_{tset}.json'
+                    output = f'{oresults_path}/plots/ps_{target}_on_{tset}'
                     plot_simulated_predicted(
-                                predicted_data=mresult,
+                                predicted_data=oresult,
                                 output=output,
                                 bound_lines=bound_lines,
                                 alpha=alpha)
 
                 plot_double_simulated_predicted(
-                             COF_data=f'{mresults_path}/COF_{fraction}_on_{tset}.json',
-                             intercept_data=f'{mresults_path}/intercept_{fraction}_on_{tset}.json',
-                             output=f'{mresults_path}/plots/dps_mixed5050_{fraction}_on_{tset}',
+                             COF_data=f'{oresults_path}/COF_on_{tset}.json',
+                             intercept_data=f'{oresults_path}/intercept_on_{tset}.json',
+                             output=f'{oresults_path}/plots/dps_original_on_{tset}',
                              bound_lines=bound_lines,
                              alpha=alpha)
 
-        # Last handle the everything set
-        for fraction in efractions:
-            for tset in test_sets:
-                for target in ['COF', 'intercept']:
-                    eresult = f'{eresults_path}/{target}_{fraction}_on_{tset}.json'
-                    output = f'{eresults_path}/plots/ps_{target}_{fraction}_on_{tset}'
+            # Then handle the 5050 model
+            for points in mpoints:
+                for tset in test_sets:
+                    for target in ['COF', 'intercept']:
+                        mresult = f'{mresults_path}/{target}_{points}_on_{tset}.json'
+                        output = f'{mresults_path}/plots/ps_{target}_{points}_on_{tset}'
+                        plot_simulated_predicted(
+                                    predicted_data=mresult,
+                                    output=output,
+                                    bound_lines=bound_lines,
+                                    alpha=alpha)
 
-                    plot_simulated_predicted(
-                                predicted_data=eresult,
-                                output=output,
-                                bound_lines=bound_lines,
-                                alpha=alpha)
+                    plot_double_simulated_predicted(
+                                 COF_data=f'{mresults_path}/COF_{points}_on_{tset}.json',
+                                 intercept_data=f'{mresults_path}/intercept_{points}_on_{tset}.json',
+                                 output=f'{mresults_path}/plots/dps_mixed5050_{points}_on_{tset}',
+                                 bound_lines=bound_lines,
+                                 alpha=alpha)
 
-                plot_double_simulated_predicted(
-                             COF_data=f'{eresults_path}/COF_{fraction}_on_{tset}.json',
-                             intercept_data=f'{eresults_path}/intercept_{fraction}_on_{tset}.json',
-                             output=f'{eresults_path}/plots/dps_everything_{fraction}_on_{tset}',
-                             bound_lines=bound_lines,
-                             alpha=alpha)
+            # Last handle the everything set
+            for points in epoints:
+                for tset in test_sets:
+                    for target in ['COF', 'intercept']:
+                        eresult = f'{eresults_path}/{target}_{points}_on_{tset}.json'
+                        output = f'{eresults_path}/plots/ps_{target}_{points}_on_{tset}'
+
+                        plot_simulated_predicted(
+                                    predicted_data=eresult,
+                                    output=output,
+                                    bound_lines=bound_lines,
+                                    alpha=alpha)
+
+                    plot_double_simulated_predicted(
+                                 COF_data=f'{eresults_path}/COF_{points}_on_{tset}.json',
+                                 intercept_data=f'{eresults_path}/intercept_{points}_on_{tset}.json',
+                                 output=f'{eresults_path}/plots/dps_everything_{points}_on_{tset}',
+                                 bound_lines=bound_lines,
+                                 alpha=alpha)
