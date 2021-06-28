@@ -268,12 +268,11 @@ def train_rf(data, target, output_path,
 
     loaded_df = pd.DataFrame()
     for item in data:
-        if isinstance(data, str):
+        if isinstance(item, str):
             tmp_df = pd.read_csv(item, index_col=0)
-        elif isinstance(data, pd.DataFrame):
-            tmp_df = data
-        loaded_df = loaded_df.append(data, ignore_index=True)
-
+        elif isinstance(item, pd.DataFrame):
+            tmp_df = item
+        loaded_df = loaded_df.append(tmp_df, ignore_index=True)
     '''
     to_drop = ['pc+-mean', 'pc+-diff',
                'pc+-min', 'pc+-max',
@@ -332,8 +331,8 @@ if __name__ == '__main__':
     overwrite = True
     for bins in [10]:
         """ Split the 50-50 mixed df and the everything df"""
-        mixed5050 = pd.read_csv('../../data/raw-data/mixed-50-50.csv', index_col=0)
-        everything = pd.read_csv('../../data/raw-data/everything.csv', index_col=0)
+        mixed5050 = pd.read_csv('../../data/raw-data/filtered_mixed-50-50.csv', index_col=0)
+        everything = pd.read_csv('../../data/raw-data/filtered_everything.csv', index_col=0)
         top_sys = pd.read_csv('../../data/raw-data/opt_22_raw.csv', index_col=0)
 
         splitted5050_path = f'../../data/splitted-data/mixed5050/nbins-{bins}'

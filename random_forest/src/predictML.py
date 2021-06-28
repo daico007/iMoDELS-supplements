@@ -291,7 +291,7 @@ def evaluate_model(test_df, model, target, features, descriptors, output_path):
             model = pickle.load(f)
     if isinstance(features, str):
         with open(features, 'rb') as f:
-            fearures = pickle.load(f)
+            features = pickle.load(f)
 
     assert isinstance(model, sklearn.ensemble.RandomForestRegressor)
     assert len(features) == model.n_features_
