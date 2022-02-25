@@ -256,7 +256,7 @@ def train_rf(data, target, output_path,
     if isinstance(data, (str, pd.DataFrame)):
         data = [data]
 
-    # Can also consider raise an error if the inpur is not in the correct format
+    # Can also consider raise an error if the input is not in the correct format
 
     identifiers = ['terminal_group_1',
                    'terminal_group_2',
@@ -280,7 +280,7 @@ def train_rf(data, target, output_path,
                'pc--min', 'pc--max']
     '''
     std = ['COF-std', 'intercept-std']
-    # Reduce the number of features by running them thorugh the original
+    # Reduce the number of features by running them through the original
     # dimensionality_reduction by Andrew,
     # Will used the new dimensionality reduction in later version
     features = list(loaded_df.drop(targets + identifiers + std, axis=1))

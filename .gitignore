@@ -133,4 +133,5 @@ dmypy.json
 .pickle
 .ptxt
 .pdf
+.json
 .idea/

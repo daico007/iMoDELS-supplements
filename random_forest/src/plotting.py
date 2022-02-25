@@ -7,6 +7,14 @@ import pandas as pd
 import os
 from matplotlib.legend_handler import HandlerBase
 
+from numpy import *
+from matplotlib.pyplot import *
+
+rcParams['mathtext.fontset'] = 'custom'
+rcParams['mathtext.it'] = 'DejaVu Sans:italic'
+rcParams['mathtext.bf'] = 'DejaVu Sans:italic:bold'
+
+
 #https://stackoverflow.com/questions/47391702/matplotlib-making-a-colored-markers-legend-from-scratch
 class MarkerHandler(HandlerBase):
     def create_artists(self, legend, tup,xdescent, ydescent,
@@ -353,7 +361,7 @@ def plot_double_feature_importances(
              edgecolor='black',
              zorder=2)
 
-    plt.title('F$_0$ Model', fontsize=28, weight='bold')
+    plt.title(r'$\mathit{F_0}$ Model', fontsize=28, weight='bold')
     plt.xlabel('Relative Importances')
     plt.ylabel('Features')
     plt.xlim(0)
@@ -424,7 +432,7 @@ def plot_double_feature_importances(
              edgecolor='black',
              zorder=2)
 
-    plt.title('F$_0$ Model', fontsize=28, weight='bold')
+    plt.title(r'$\mathit{F_0}$ Model', fontsize=28, weight='bold')
     plt.xlabel('Relative Importances')
     plt.ylabel('Features')
     plt.xlim(0)
@@ -489,7 +497,7 @@ def plot_double_feature_importances(
              edgecolor='black',
              zorder=2)
 
-    plt.title('F$_0$ Model', fontsize=28, weight='bold')
+    plt.title(r'$\mathbf{F_0}$ (Predicted), nN', fontsize=28, weight='bold')
     plt.xlabel('Relative Importances')
     plt.ylabel('Features')
     plt.xlim(0)
@@ -560,8 +568,8 @@ def plot_simulated_predicted(predicted_data,
     elif target == 'intercept':
         plt.xlim(-1, 9)
         plt.ylim(-1, 9)
-        plt.xlabel('F$_0$ (Predicted)')
-        plt.ylabel('F$_0$ (Simulated)')
+        plt.xlabel(r'$\mathbf{F_0}$ (Predicted), nN')
+        plt.ylabel(r'$\mathbf{F_0}$ (Simulated), nN')
         plt.text(x=5.5, y=0.3, s=f'r$^2$={results["r_square"]:.3f}', fontsize=28)
     xpoints = ypoints = plt.xlim()
     plt.plot(xpoints, ypoints, linestyle='--', color='k', lw=3, scalex=False, scaley=False, alpha=0.2)
@@ -646,9 +654,9 @@ def plot_double_simulated_predicted(
 
     # Plot intercept
     plt.subplot(1, 2, 2)
-    plt.title('F$_{0}$ Model', fontsize=28, weight='bold')
-    plt.xlabel('F$_{0}$ (Predicted), nN')
-    plt.ylabel('F$_{0}$ (Simulated), nN')
+    plt.title(r'$\mathbf{F_0}$ (Predicted), nN', fontsize=28, weight='bold')
+    plt.xlabel(r'$\mathbf{F_0}$ (Predicted), nN')
+    plt.ylabel(r'$\mathbf{F_0}$ (Simulated), nN')
     plt.scatter(results['intercept']['x'], results['intercept']['y'], alpha=alpha, marker='o')
     plt.text(x=5.5, y=0.3, s=f'r$^2$={results["intercept"]["r_square"]:.3f}', fontsize=28)
     plt.xlim(-1, 9)
