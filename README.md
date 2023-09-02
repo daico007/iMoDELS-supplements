@@ -13,7 +13,7 @@ These properties are calculated using the Amonton's Law of Friction. The frictio
 
 This study utilized the Random Forest Regressor provided by [scikit-learn](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestRegressor.html). 
 Multiple ML models were created, each varied by the number data points of their training set and/or the seed used to select data points out of the main data set. 
-
+Due to the size of all the trained model, the original repository (with all trained models and their evaluation) is archived and uploaded to Zenodo (https://zenodo.org/record/6307005).
 
 
 ### Using this repository
